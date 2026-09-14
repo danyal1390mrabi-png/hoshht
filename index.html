@@ -592,18 +592,31 @@
   <!-- ============ ROOMS SCREEN ============ -->
   <div id="roomsScreen">
     <div class="login-card">
-      <h1>💬 اتاق‌های چت</h1>
-      <p>یک اتاق رو انتخاب کن یا اتاق جدید بساز</p>
-      <div id="roomsList"></div>
-      <button class="submit-btn" id="showCreateRoomBtn" style="margin-top:14px;">+ ساخت اتاق جدید</button>
+      <h1>💬 صفحه اصلی</h1>
+      <p>یک گروه، یک هوش مصنوعی یا یک کاربر رو انتخاب کن</p>
 
-      <div id="createRoomForm" style="display:none; margin-top:14px;">
-        <input id="roomNameInput" type="text" placeholder="اسم اتاق (انگلیسی)" maxlength="30" autocomplete="off">
-        <input id="roomPasswordInput" type="text" placeholder="پسورد (اختیاری)" maxlength="30" autocomplete="off">
-        <div class="ai-select-label">دستیار هوش مصنوعی گروه (اختیاری)</div>
-        <select id="roomAiSelect"><option value="">— بدون هوش مصنوعی —</option></select>
-        <button class="submit-btn" id="createRoomBtn">ساخت و ورود به اتاق</button>
+      <div class="switcher-tabs" id="homeTabs">
+        <button class="switcher-tab active" data-hometab="groups">👥 گروه‌ها</button>
+        <button class="switcher-tab" data-hometab="ai">🤖 هوش مصنوعی</button>
+        <button class="switcher-tab" data-hometab="users">👤 کاربران</button>
       </div>
+
+      <div id="homeGroupsPane">
+        <div id="roomsList"></div>
+        <button class="submit-btn" id="showCreateRoomBtn" style="margin-top:14px;">+ ساخت اتاق جدید</button>
+
+        <div id="createRoomForm" style="display:none; margin-top:14px;">
+          <input id="roomNameInput" type="text" placeholder="اسم اتاق (انگلیسی)" maxlength="30" autocomplete="off">
+          <input id="roomPasswordInput" type="text" placeholder="پسورد (اختیاری)" maxlength="30" autocomplete="off">
+          <div class="ai-select-label">دستیار هوش مصنوعی گروه (اختیاری)</div>
+          <select id="roomAiSelect"><option value="">— بدون هوش مصنوعی —</option></select>
+          <button class="submit-btn" id="createRoomBtn">ساخت و ورود به اتاق</button>
+        </div>
+      </div>
+
+      <div id="homeAiPane" style="display:none;"></div>
+      <div id="homeUsersPane" style="display:none;"></div>
+
       <div class="login-error" id="roomsError"></div>
 
       <div class="install-banner">
@@ -650,6 +663,19 @@
     </div>
   </div>
 
+  <!-- ============ OTP VERIFY SCREEN ============ -->
+  <div id="otpScreen" style="display:none;">
+    <div class="login-card">
+      <h1>📱 تایید شماره</h1>
+      <p id="otpInfoText">کد تایید به شماره وارد شده پیامک شد</p>
+      <input id="otpInput" type="tel" placeholder="کد تایید" maxlength="6" autocomplete="off" inputmode="numeric">
+      <button class="submit-btn" id="otpVerifyBtn">تایید و ورود به چت</button>
+      <div class="login-error" id="otpError"></div>
+      <p class="switch-link" id="otpResendBtn">کد رو نگرفتی؟ دوباره ارسال کن</p>
+      <p class="switch-link" id="otpBackBtn">بازگشت و اصلاح اطلاعات</p>
+    </div>
+  </div>
+
   <!-- ============ USERNAME LOGIN SCREEN ============ -->
   <div id="usernameLoginScreen" style="display:none;">
     <div class="login-card">
@@ -682,7 +708,7 @@
           <div class="conv-title-sub" id="convTitleSub"></div>
         </div>
       </div>
-      <button class="switcher-btn" id="switcherBtn" title="لیست‌ها">🔑</button>
+      <button class="switcher-btn" id="switcherBtn" title="صفحه اصلی">🔑</button>
     </header>
 
     <main class="chat-area" id="chatArea"></main>
@@ -696,22 +722,6 @@
     </footer>
   </div>
 
-</div>
-
-<!-- ============ SWITCHER PANEL (AI list / Groups list / Online users) ============ -->
-<div class="switcher-overlay" id="switcherOverlay">
-  <div class="switcher-panel">
-    <div class="switcher-header">
-      <h3>لیست‌ها</h3>
-      <button class="switcher-close" id="switcherCloseBtn">✕</button>
-    </div>
-    <div class="switcher-tabs">
-      <button class="switcher-tab active" data-tab="ai">🤖 هوش مصنوعی</button>
-      <button class="switcher-tab" data-tab="groups">👥 گروه‌ها</button>
-      <button class="switcher-tab" data-tab="users">🟢 آنلاین‌ها</button>
-    </div>
-    <div class="switcher-body" id="switcherBody"></div>
-  </div>
 </div>
 
 <!-- ============ NEW GROUP MODAL (from inside chat) ============ -->
@@ -760,11 +770,16 @@ const SUPABASE_ANON_KEY = "sb_publishable_8zXNILcWmGFXOGZ5F6SgvA_Z7rYWfCA";
 const isConfigured = !SUPABASE_URL.startsWith("YOUR_") && !SUPABASE_ANON_KEY.startsWith("YOUR_");
 const supabaseClient = isConfigured ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
+// ---- تنظیمات ورکر ارسال کد تایید پیامکی ----
+const OTP_WORKER_URL = "https://apix.danyalcode.ir";
+
 /* =======================================================================
    2) متغیرهای عمومی
    ======================================================================= */
 const MAX_MESSAGES = 100;
 let selectedRoom = null; // { id, name, slug, password }
+let pendingSelection = null; // { type:'room'|'dmBot'|'dmUser', ... } - what to open once logged in / back home
+let sessionActive = false;   // true once the user has an active presence/chat session
 let myProfile = null; // { name, phone, age, city, gender }
 let presenceChannel = null;
 let onlineUsersState = {}; // username -> profile, from global presence
@@ -1033,11 +1048,18 @@ async function loadRooms(){
 function selectRoom(room){
   if (room.password){
     pendingRoom = room;
-    roomPasswordName.textContent = 'اتاق «' + room.name + '»';
-    roomPasswordCheckInput.value = '';
-    roomPasswordError.textContent = '';
-    roomsScreen.style.display = 'none';
-    roomPasswordScreen.style.display = 'flex';
+    if (sessionActive){
+      const pass = prompt('این گروه قفل است. پسورد رو وارد کن:');
+      if (pass === null) return;
+      if (pass !== room.password){ alert('پسورد اشتباهه.'); return; }
+      enterRoom(room);
+    } else {
+      roomPasswordName.textContent = 'اتاق «' + room.name + '»';
+      roomPasswordCheckInput.value = '';
+      roomPasswordError.textContent = '';
+      roomsScreen.style.display = 'none';
+      roomPasswordScreen.style.display = 'flex';
+    }
   } else {
     enterRoom(room);
   }
@@ -1045,10 +1067,95 @@ function selectRoom(room){
 
 function enterRoom(room){
   selectedRoom = room;
-  roomsScreen.style.display = 'none';
   roomPasswordScreen.style.display = 'none';
-  showWelcomeBackOrForm();
+  chooseHomeEntity({ type: 'room', room });
 }
+
+// یک اتاق/بات/کاربر از صفحه اصلی انتخاب شده:
+// اگه از قبل تو یه چت هستیم (کلید 🔑 زده شده)، مستقیم بریم توش،
+// وگرنه (اولین ورود به برنامه) اول باید لاگین/ثبت‌نام بشه.
+function chooseHomeEntity(entity){
+  if (sessionActive){
+    roomsScreen.style.display = 'none';
+    roomPasswordScreen.style.display = 'none';
+    chatScreen.style.display = 'flex';
+    selectConversation(entity);
+  } else {
+    pendingSelection = entity;
+    roomsScreen.style.display = 'none';
+    showWelcomeBackOrForm();
+  }
+}
+
+function setHomeTab(which){
+  document.querySelectorAll('#homeTabs .switcher-tab').forEach(t => t.classList.toggle('active', t.dataset.hometab === which));
+  homeGroupsPane.style.display = which === 'groups' ? 'block' : 'none';
+  homeAiPane.style.display = which === 'ai' ? 'block' : 'none';
+  homeUsersPane.style.display = which === 'users' ? 'block' : 'none';
+  if (which === 'groups') loadRooms();
+  else if (which === 'ai') renderHomeAiPane();
+  else renderHomeUsersPane();
+}
+
+const homeGroupsPane = document.getElementById('homeGroupsPane');
+const homeAiPane = document.getElementById('homeAiPane');
+const homeUsersPane = document.getElementById('homeUsersPane');
+
+document.querySelectorAll('#homeTabs .switcher-tab').forEach(tab => {
+  tab.addEventListener('click', () => setHomeTab(tab.dataset.hometab));
+});
+
+function renderHomeAiPane(){
+  homeAiPane.innerHTML = '';
+  if (!AI_BOTS.length){
+    const empty = document.createElement('div');
+    empty.className = 'switcher-empty';
+    empty.textContent = 'هیچ هوش مصنوعی‌ای تعریف نشده.';
+    homeAiPane.appendChild(empty);
+    return;
+  }
+  AI_BOTS.forEach(bot => {
+    const active = sessionActive && currentConv && currentConv.type === 'dmBot' && currentConv.bot.id === bot.id;
+    const item = document.createElement('div');
+    item.className = 'switcher-item' + (active ? ' active' : '');
+    item.innerHTML = `<span class="avatar" style="background:${bot.color}">${bot.avatar}</span>
+      <div class="switcher-item-info"><div class="switcher-item-name">${escapeHtml(bot.name)}</div><div class="switcher-item-sub">${escapeHtml(bot.tagline || '')}</div></div>`;
+    item.addEventListener('click', () => chooseHomeEntity({ type: 'dmBot', bot }));
+    homeAiPane.appendChild(item);
+  });
+}
+
+async function renderHomeUsersPane(){
+  homeUsersPane.innerHTML = '<div class="switcher-empty">در حال بارگذاری...</div>';
+  const { data, error } = await supabaseClient.from('users').select('*').order('name', { ascending: true });
+  homeUsersPane.innerHTML = '';
+  const list = (data || []).filter(u => !myProfile || u.username !== myProfile.username);
+  if (error || !list.length){
+    const empty = document.createElement('div');
+    empty.className = 'switcher-empty';
+    empty.textContent = 'هنوز کاربری ثبت‌نام نکرده.';
+    homeUsersPane.appendChild(empty);
+    return;
+  }
+  list.forEach(u => {
+    const active = sessionActive && currentConv && currentConv.type === 'dmUser' && currentConv.user.username === u.username;
+    const item = document.createElement('div');
+    item.className = 'switcher-item' + (active ? ' active' : '');
+    item.innerHTML = `<span class="avatar" style="background:${colorFor(u.name)}">${initials(u.name)}</span>
+      <div class="switcher-item-info"><div class="switcher-item-name">${escapeHtml(u.name)}</div><div class="switcher-item-sub">@${escapeHtml(u.username)}</div></div>`;
+    item.addEventListener('click', () => chooseHomeEntity({ type: 'dmUser', user: u }));
+    homeUsersPane.appendChild(item);
+  });
+}
+
+// کلید 🔑 داخل چت: می‌بره به صفحه اصلی (لیست گروه‌ها/هوش مصنوعی/کاربران)
+function goHome(){
+  chatScreen.style.display = 'none';
+  roomsScreen.style.display = 'flex';
+  setHomeTab('groups');
+}
+const switcherBtn = document.getElementById('switcherBtn');
+switcherBtn.addEventListener('click', goHome);
 
 roomPasswordSubmitBtn.addEventListener('click', () => {
   if (!pendingRoom) return;
@@ -1133,6 +1240,16 @@ const welcomeBackName = document.getElementById('welcomeBackName');
 const welcomeContinueBtn = document.getElementById('welcomeContinueBtn');
 const welcomeNotMeBtn = document.getElementById('welcomeNotMeBtn');
 
+const otpScreen = document.getElementById('otpScreen');
+const otpInfoText = document.getElementById('otpInfoText');
+const otpInput = document.getElementById('otpInput');
+const otpVerifyBtn = document.getElementById('otpVerifyBtn');
+const otpError = document.getElementById('otpError');
+const otpResendBtn = document.getElementById('otpResendBtn');
+const otpBackBtn = document.getElementById('otpBackBtn');
+
+let pendingSignupProfile = null; // پروفایلی که منتظر تایید کد پیامکی است
+
 const SAVED_PROFILE_KEY = 'chatSavedProfile';
 
 function getSavedProfile(){
@@ -1211,10 +1328,15 @@ welcomeNotMeBtn.addEventListener('click', () => {
   loginScreen.style.display = 'flex';
 });
 
+function pendingSelectionLabel(){
+  if (pendingSelection && pendingSelection.type === 'dmBot') return 'گفتگو با ' + pendingSelection.bot.name;
+  if (pendingSelection && pendingSelection.type === 'dmUser') return 'گفتگو با ' + pendingSelection.user.name;
+  return 'اتاق «' + (selectedRoom ? selectedRoom.name : '') + '»';
+}
 function showWelcomeBackOrForm(){
   const saved = getSavedProfile();
   if (saved && saved.name){
-    welcomeBackName.textContent = 'با یوزرنیم «' + saved.username + '» (' + saved.name + ') وارد اتاق «' + selectedRoom.name + '» شو';
+    welcomeBackName.textContent = 'با یوزرنیم «' + saved.username + '» (' + saved.name + ') وارد ' + pendingSelectionLabel() + ' شو';
     loginScreen.style.display = 'none';
     usernameLoginScreen.style.display = 'none';
     welcomeBackScreen.style.display = 'flex';
@@ -1245,23 +1367,122 @@ async function joinChat(){
     loginError.textContent = "یوزرنیم فقط باید انگلیسی باشه (حروف، عدد، _).";
     return;
   }
-  loginError.textContent = "";
-
-  const profile = { username, name, phone, age, city, gender: selectedGender };
-
-  const { error: upsertError } = await supabaseClient
-    .from('users')
-    .upsert(profile, { onConflict: 'username' });
-
-  if (upsertError){
-    loginError.textContent = "این یوزرنیم قبلاً گرفته شده، یه یوزرنیم دیگه امتحان کن.";
+  if (!/^09\d{9}$/.test(phone)){
+    loginError.textContent = "شماره موبایل رو درست وارد کن (مثل 09123456789).";
     return;
   }
+  loginError.textContent = "";
+  joinBtn.disabled = true;
+  const originalBtnText = joinBtn.textContent;
+  joinBtn.textContent = "در حال ارسال کد...";
 
-  myProfile = profile;
-  saveProfileLocally(profile);
-  proceedJoin();
+  try{
+    const sent = await sendOtpCode(phone);
+    if (!sent){
+      loginError.textContent = "ارسال کد با مشکل مواجه شد، دوباره امتحان کن.";
+      return;
+    }
+  }catch(e){
+    loginError.textContent = "ارسال کد با مشکل مواجه شد، دوباره امتحان کن.";
+    return;
+  }finally{
+    joinBtn.disabled = false;
+    joinBtn.textContent = originalBtnText;
+  }
+
+  pendingSignupProfile = { username, name, phone, age, city, gender: selectedGender };
+  showOtpScreen();
 }
+
+function showOtpScreen(){
+  loginScreen.style.display = 'none';
+  otpScreen.style.display = 'flex';
+  otpInput.value = '';
+  otpError.textContent = '';
+  otpInfoText.textContent = 'کد تایید به شماره ' + pendingSignupProfile.phone + ' پیامک شد';
+  otpInput.focus();
+}
+
+async function sendOtpCode(phone){
+  const res = await fetch(OTP_WORKER_URL + '/send-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone })
+  });
+  if (!res.ok) return false;
+  const data = await res.json().catch(() => ({}));
+  return !!data.ok;
+}
+
+async function verifyOtpCode(phone, code){
+  const res = await fetch(OTP_WORKER_URL + '/verify-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone, code })
+  });
+  if (!res.ok) return false;
+  const data = await res.json().catch(() => ({}));
+  return !!data.ok;
+}
+
+otpVerifyBtn.addEventListener('click', confirmOtpAndSignup);
+otpInput.addEventListener('keydown', e => { if (e.key === 'Enter') confirmOtpAndSignup(); });
+
+async function confirmOtpAndSignup(){
+  if (!pendingSignupProfile) return;
+  const code = otpInput.value.trim();
+  if (!code){
+    otpError.textContent = "کد تایید رو وارد کن.";
+    return;
+  }
+  otpError.textContent = "";
+  otpVerifyBtn.disabled = true;
+  const originalText = otpVerifyBtn.textContent;
+  otpVerifyBtn.textContent = "در حال بررسی...";
+
+  try{
+    const ok = await verifyOtpCode(pendingSignupProfile.phone, code);
+    if (!ok){
+      otpError.textContent = "کد وارد شده اشتباهه یا منقضی شده.";
+      return;
+    }
+
+    const { error: upsertError } = await supabaseClient
+      .from('users')
+      .upsert(pendingSignupProfile, { onConflict: 'username' });
+
+    if (upsertError){
+      otpError.textContent = "این یوزرنیم قبلاً گرفته شده، یه یوزرنیم دیگه امتحان کن.";
+      return;
+    }
+
+    myProfile = pendingSignupProfile;
+    saveProfileLocally(myProfile);
+    otpScreen.style.display = 'none';
+    pendingSignupProfile = null;
+    proceedJoin();
+  }catch(e){
+    otpError.textContent = "خطایی پیش اومد، دوباره امتحان کن.";
+  }finally{
+    otpVerifyBtn.disabled = false;
+    otpVerifyBtn.textContent = originalText;
+  }
+}
+
+otpResendBtn.addEventListener('click', async () => {
+  if (!pendingSignupProfile) return;
+  otpError.textContent = "";
+  otpResendBtn.textContent = "در حال ارسال...";
+  const sent = await sendOtpCode(pendingSignupProfile.phone);
+  otpResendBtn.textContent = "کد رو نگرفتی؟ دوباره ارسال کن";
+  otpError.textContent = sent ? "کد جدید ارسال شد." : "ارسال دوباره با مشکل مواجه شد.";
+});
+
+otpBackBtn.addEventListener('click', () => {
+  otpScreen.style.display = 'none';
+  loginScreen.style.display = 'flex';
+  pendingSignupProfile = null;
+});
 
 function proceedJoin(){
   const userKey = 'u_' + Date.now() + '_' + Math.random().toString(36).slice(2);
@@ -1272,12 +1493,12 @@ function proceedJoin(){
   presenceChannel
     .on('presence', { event: 'sync' }, () => {
       updateOnlineUsersState();
-      if (switcherTab === 'users' && switcherOverlay.classList.contains('open')) renderUsersTab();
       if (currentConv && currentConv.type === 'dmUser') updateConvHeader();
     })
     .subscribe(async (status) => {
       if (status === 'SUBSCRIBED'){
         await presenceChannel.track(myProfile);
+        sessionActive = true;
         startChat();
       }
     });
@@ -1303,6 +1524,7 @@ async function startChat(){
   loginScreen.style.display = 'none';
   usernameLoginScreen.style.display = 'none';
   welcomeBackScreen.style.display = 'none';
+  roomsScreen.style.display = 'none';
   chatScreen.style.display = 'flex';
 
   window.addEventListener('beforeunload', () => {
@@ -1310,14 +1532,15 @@ async function startChat(){
   });
 
   setupMobileKeyboardFix();
-  await selectConversation({ type: 'room', room: selectedRoom });
+  const conv = pendingSelection || { type: 'room', room: selectedRoom };
+  pendingSelection = null;
+  await selectConversation(conv);
 }
 
 /* =======================================================================
    4b) سوییچ بین گفت‌وگوها (گروه / پیام خصوصی با شخص / پیام خصوصی با هوش مصنوعی)
    ======================================================================= */
 async function selectConversation(conv){
-  closeSwitcher();
   hideTypingIndicator();
   if (msgChannel){ supabaseClient.removeChannel(msgChannel); msgChannel = null; }
 
@@ -1463,114 +1686,7 @@ function renderMessage(msg){
   chatArea.appendChild(row);
 }
 
-/* =======================================================================
-   4c) پنل سوییچر بالای صفحه: هوش مصنوعی‌ها / گروه‌ها / آنلاین‌ها
-   ======================================================================= */
-const switcherOverlay = document.getElementById('switcherOverlay');
-const switcherBtn = document.getElementById('switcherBtn');
-const switcherCloseBtn = document.getElementById('switcherCloseBtn');
-const switcherBody = document.getElementById('switcherBody');
-let switcherTab = 'ai';
-
-switcherBtn.addEventListener('click', openSwitcher);
-switcherCloseBtn.addEventListener('click', closeSwitcher);
-switcherOverlay.addEventListener('click', (e) => { if (e.target === switcherOverlay) closeSwitcher(); });
-document.querySelectorAll('.switcher-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.switcher-tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    switcherTab = tab.dataset.tab;
-    renderSwitcherBody();
-  });
-});
-
-function openSwitcher(){
-  switcherOverlay.classList.add('open');
-  renderSwitcherBody();
-}
-function closeSwitcher(){
-  switcherOverlay.classList.remove('open');
-}
-function renderSwitcherBody(){
-  if (switcherTab === 'ai') renderAiTab();
-  else if (switcherTab === 'groups') renderGroupsTab();
-  else renderUsersTab();
-}
-
-function renderAiTab(){
-  switcherBody.innerHTML = '';
-  AI_BOTS.forEach(bot => {
-    const active = currentConv && currentConv.type === 'dmBot' && currentConv.bot.id === bot.id;
-    const item = document.createElement('div');
-    item.className = 'switcher-item' + (active ? ' active' : '');
-    item.innerHTML = `<span class="avatar" style="background:${bot.color}">${bot.avatar}</span>
-      <div class="switcher-item-info"><div class="switcher-item-name">${escapeHtml(bot.name)}</div><div class="switcher-item-sub">${escapeHtml(bot.tagline || '')}</div></div>`;
-    item.addEventListener('click', () => selectConversation({ type: 'dmBot', bot }));
-    switcherBody.appendChild(item);
-  });
-}
-
-async function renderGroupsTab(){
-  switcherBody.innerHTML = '';
-  const newBtn = document.createElement('button');
-  newBtn.className = 'switcher-new-group-btn';
-  newBtn.textContent = '+ ساخت گروه جدید';
-  newBtn.addEventListener('click', openNewGroupModal);
-  switcherBody.appendChild(newBtn);
-
-  const { data, error } = await supabaseClient.from('rooms').select('*').order('created_at', { ascending: false });
-  if (error || !data || !data.length){
-    const empty = document.createElement('div');
-    empty.className = 'switcher-empty';
-    empty.textContent = 'هنوز گروهی ساخته نشده.';
-    switcherBody.appendChild(empty);
-    return;
-  }
-  data.forEach(room => {
-    const active = currentConv && currentConv.type === 'room' && currentConv.room.id === room.id;
-    const bot = room.ai_bot_id ? getBot(room.ai_bot_id) : null;
-    const item = document.createElement('div');
-    item.className = 'switcher-item' + (active ? ' active' : '');
-    item.innerHTML = `<span class="avatar" style="background:${colorFor(room.name)}">👥</span>
-      <div class="switcher-item-info"><div class="switcher-item-name">${escapeHtml(room.name)} ${room.password ? '🔒' : ''}</div>
-      <div class="switcher-item-sub">${bot ? ('دستیار: ' + bot.avatar + ' ' + bot.name) : 'بدون دستیار'}</div></div>`;
-    item.addEventListener('click', () => openGroupFromSwitcher(room));
-    switcherBody.appendChild(item);
-  });
-}
-
-function openGroupFromSwitcher(room){
-  if (room.password){
-    const pass = prompt('این گروه قفل است. پسورد رو وارد کن:');
-    if (pass === null) return;
-    if (pass !== room.password){ alert('پسورد اشتباهه.'); return; }
-  }
-  selectConversation({ type: 'room', room });
-}
-
-function renderUsersTab(){
-  switcherBody.innerHTML = '';
-  const others = Object.values(onlineUsersState).filter(p => p.username !== myProfile.username);
-  if (!others.length){
-    const empty = document.createElement('div');
-    empty.className = 'switcher-empty';
-    empty.textContent = 'الان کسی آنلاین نیست.';
-    switcherBody.appendChild(empty);
-    return;
-  }
-  others.forEach(p => {
-    const active = currentConv && currentConv.type === 'dmUser' && currentConv.user.username === p.username;
-    const item = document.createElement('div');
-    item.className = 'switcher-item' + (active ? ' active' : '');
-    item.innerHTML = `<span class="avatar" style="background:${colorFor(p.name)}">${initials(p.name)}</span>
-      <div class="switcher-item-info"><div class="switcher-item-name">${escapeHtml(p.name)}</div><div class="switcher-item-sub">@${escapeHtml(p.username)}</div></div>
-      <span class="switcher-item-dot"></span>`;
-    item.addEventListener('click', () => selectConversation({ type: 'dmUser', user: p }));
-    switcherBody.appendChild(item);
-  });
-}
-
-/* ---------------- مودال ساخت گروه از داخل چت ---------------- */
+/* ---------------- مودال ساخت گروه از داخل چت (فعلاً بدون استفاده) ---------------- */
 const newGroupModal = document.getElementById('newGroupModal');
 const newGroupNameInput = document.getElementById('newGroupNameInput');
 const newGroupPasswordInput = document.getElementById('newGroupPasswordInput');
