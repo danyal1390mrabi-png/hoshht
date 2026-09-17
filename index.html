@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
-<title>دانیال کد چت انلاین با امکانات خفن و هوش مصنوعی رایگان</title>
+<title>چت آنلاین</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0f0c29">
 <link rel="icon" href="icon-192.png">
@@ -682,6 +682,7 @@
       <h1>🔑 ورود با یوزرنیم</h1>
       <p>یوزرنیمت رو وارد کن تا مشخصاتت خودکار پر بشه</p>
       <input id="usernameLoginInput" type="text" placeholder="یوزرنیم" maxlength="20" autocomplete="off">
+      <input id="usernameLoginPasswordInput" type="password" placeholder="رمز عبور" maxlength="60" autocomplete="off">
       <button class="submit-btn" id="usernameLoginBtn">ورود</button>
       <div class="login-error" id="usernameLoginError"></div>
       <p class="switch-link" id="backToSignupBtn">یوزرنیم نداری؟ همین حالا ثبت‌نام کن</p>
@@ -1230,6 +1231,7 @@ const loginError = document.getElementById('loginError');
 
 const usernameLoginScreen = document.getElementById('usernameLoginScreen');
 const usernameLoginInput = document.getElementById('usernameLoginInput');
+const usernameLoginPasswordInput = document.getElementById('usernameLoginPasswordInput');
 const usernameLoginBtn = document.getElementById('usernameLoginBtn');
 const usernameLoginError = document.getElementById('usernameLoginError');
 const showUsernameLoginBtn = document.getElementById('showUsernameLoginBtn');
@@ -1285,6 +1287,7 @@ joinBtn.addEventListener('click', joinChat);
 showUsernameLoginBtn.addEventListener('click', () => {
   loginScreen.style.display = 'none';
   usernameLoginScreen.style.display = 'flex';
+  usernameLoginPasswordInput.value = '';
   usernameLoginError.textContent = '';
 });
 backToSignupBtn.addEventListener('click', () => {
@@ -1294,29 +1297,61 @@ backToSignupBtn.addEventListener('click', () => {
 
 usernameLoginBtn.addEventListener('click', loginWithUsername);
 usernameLoginInput.addEventListener('keydown', e => { if (e.key === 'Enter') loginWithUsername(); });
+usernameLoginPasswordInput.addEventListener('keydown', e => { if (e.key === 'Enter') loginWithUsername(); });
 
 async function loginWithUsername(){
   const username = usernameLoginInput.value.trim();
+  const password = usernameLoginPasswordInput.value;
+
   if (!username){
     usernameLoginError.textContent = 'یوزرنیم رو وارد کن.';
     return;
   }
-  const { data, error } = await supabaseClient
-    .from('users')
-    .select('*')
-    .eq('username', username)
-    .maybeSingle();
-
-  if (error || !data){
-    usernameLoginError.textContent = 'یوزرنیمی با این اسم پیدا نشد.';
+  if (!password){
+    usernameLoginError.textContent = 'رمز عبور رو وارد کن.';
     return;
   }
+
   usernameLoginError.textContent = '';
-  const profile = { username: data.username, name: data.name, phone: data.phone, age: data.age, city: data.city, gender: data.gender };
-  myProfile = profile;
-  saveProfileLocally(profile);
-  usernameLoginScreen.style.display = 'none';
-  proceedJoin();
+  usernameLoginBtn.disabled = true;
+  const originalText = usernameLoginBtn.textContent;
+  usernameLoginBtn.textContent = 'در حال بررسی...';
+
+  try{
+    const { data, error } = await supabaseClient
+      .from('users')
+      .select('*')
+      .eq('username', username)
+      .maybeSingle();
+
+    if (error || !data){
+      usernameLoginError.textContent = 'یوزرنیمی با این اسم پیدا نشد.';
+      return;
+    }
+
+    if (!data.password_hash){
+      usernameLoginError.textContent = 'این حساب رمز عبور نداره؛ از فرم ثبت‌نام کامل وارد شو.';
+      return;
+    }
+
+    const enteredHash = await sha256Hex(password);
+    if (enteredHash !== data.password_hash){
+      usernameLoginError.textContent = 'رمز عبور اشتباهه.';
+      return;
+    }
+
+    const profile = { username: data.username, name: data.name, phone: data.phone, age: data.age, city: data.city, gender: data.gender };
+    myProfile = profile;
+    saveProfileLocally(profile);
+    usernameLoginPasswordInput.value = '';
+    usernameLoginScreen.style.display = 'none';
+    proceedJoin();
+  }catch(e){
+    usernameLoginError.textContent = 'خطایی پیش اومد، دوباره امتحان کن.';
+  }finally{
+    usernameLoginBtn.disabled = false;
+    usernameLoginBtn.textContent = originalText;
+  }
 }
 
 welcomeContinueBtn.addEventListener('click', () => {
