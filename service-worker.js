@@ -17,10 +17,19 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Network-first for everything (chat needs live data); fall back to cache only when offline
+// Network-first for everything (chat needs live data); fall back to cache only when offline,
+// and if there's nothing cached either, return a real error Response instead of undefined
+// (returning undefined from respondWith throws "Failed to convert value to 'Response'").
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request))
+    fetch(event.request).catch(async () => {
+      const cached = await caches.match(event.request);
+      if (cached) return cached;
+      return new Response('', {
+        status: 503,
+        statusText: 'Service Unavailable (offline, not cached)'
+      });
+    })
   );
 });
